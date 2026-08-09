@@ -56,6 +56,13 @@ its height, so the layout never reflows under a finger already on its way down.
 **Always an escape hatch.** The suggestions will sometimes miss. Quick phrases
 (Yes / No / Hold on / Say again) are always on screen and never touch the network,
 and "⌨ Type it" is always one tap away. If the API is down, those still work.
+"💭 Steer it" takes a few words about what he wants to talk about and builds the
+five tiles around that instead — the suggestions follow the other person's lead by
+default, and this is how he takes it back.
+
+**Misheard lines can be deleted.** Recognition errors don't just sit in the
+transcript, they get fed into every following suggestion. Hovering a heard line
+shows a × that removes it.
 
 **Emotional range on purpose.** A suggestion set where every option is pleasant
 can't express how he actually feels. Being annoyed, bored, or done talking are
@@ -147,8 +154,12 @@ Working prototype. What it does not yet have:
 
 - **No real-user testing.** Everything here is a guess about what helps until he
   has used it. The intent categories and the tone set are the first things that
-  should change based on what he actually reaches for.
-- Nothing handles the microphone picking up a third person in the room.
-- Recognition errors go into the transcript unedited, and a garbled transcript
-  produces garbled suggestions. There's no way to correct a turn yet.
+  should change based on what he actually reaches for, and the tone names
+  (`casual`, `warm`, `firm`…) are placeholders until he says what fits.
+- Nothing handles the microphone picking up a third person in the room —
+  everything heard is attributed to one conversation partner.
+- A misheard line can be deleted but not edited, so a mostly-right transcription
+  has to be thrown away rather than fixed.
 - Memory has no undo — a bad fact has to be edited out by hand in settings.
+- Group conversations, phone calls, and anything that isn't two people in a room
+  are out of scope so far.

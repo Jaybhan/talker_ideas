@@ -135,6 +135,24 @@ function addTurn(turn) {
   body.textContent = turn.text;
   node.append(who, body);
 
+  // Speech recognition mishears, and a wrong turn doesn't just sit there — it
+  // is fed into every following suggestion. Let it be dropped.
+  if (turn.speaker !== 'me') {
+    const drop = document.createElement('button');
+    drop.className = 'turn-drop';
+    drop.textContent = '×';
+    drop.title = 'Misheard — remove this';
+    drop.setAttribute('aria-label', `Remove misheard line: ${turn.text}`);
+    drop.addEventListener('click', () => {
+      const at = state.turns.indexOf(turn);
+      if (at !== -1) state.turns.splice(at, 1);
+      node.remove();
+      if (!state.turns.length) renderMessage('Press Space to start listening, or use ⌨ Type it.');
+      toast('Removed');
+    });
+    node.append(drop);
+  }
+
   document.querySelector('.turn-interim')?.remove();
   el.transcript.append(node);
   el.transcript.scrollTop = el.transcript.scrollHeight;
@@ -496,6 +514,12 @@ $('repeat-last').addEventListener('click', () => {
   const voice = voices.find((v) => v.voiceURI === state.settings.voiceURI);
   if (voice) utter.voice = voice;
   speechSynthesis.speak(utter);
+});
+
+$('open-nudge').addEventListener('click', () => {
+  el.nudgeInput.value = '';
+  el.nudgeDialog.showModal();
+  el.nudgeInput.focus();
 });
 
 $('open-type').addEventListener('click', () => {

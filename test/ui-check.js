@@ -56,6 +56,19 @@ await page.waitForTimeout(400);
 const spoken = await page.evaluate(() => window.__spoken);
 await page.screenshot({ path: `${OUT}/3-spoken.png` });
 
+// A misheard line must be removable — otherwise it poisons every later turn.
+const before = await page.evaluate(() => window.talker.state.turns.length);
+await page.hover('.turn-them');
+await page.click('.turn-them .turn-drop');
+const after = await page.evaluate(() => window.talker.state.turns.length);
+if (after !== before - 1) problems.push(`dropping a misheard turn did not update state (${before}→${after})`);
+
+// "Steer it" must actually open — the feature is useless if unreachable.
+await page.click('#open-nudge');
+const nudgeOpen = await page.evaluate(() => document.getElementById('nudge-dialog').open);
+if (!nudgeOpen) problems.push('#open-nudge did not open the steer dialog');
+await page.evaluate(() => document.getElementById('nudge-dialog').close());
+
 // Light theme render
 await page.emulateMedia({ colorScheme: 'light' });
 await page.waitForTimeout(400); // let colour transitions settle before capture
