@@ -1,0 +1,707 @@
+/* Talker — AAC conversation assistant.
+ *
+ * Design constraints, all of them driven by who uses this:
+ *   · Tap targets are large. Motor control may be limited; a missed tap costs
+ *     a whole conversational turn.
+ *   · Contrast is high and type is big. This gets used at arm's length, on a
+ *     mounted tablet, sometimes by someone with impaired vision.
+ *   · Nothing important moves. Tiles fill in place as they stream; the layout
+ *     never reflows under a finger that is already on its way down.
+ */
+
+:root {
+  --bg: #0f1620;
+  --bg-raised: #17202c;
+  --bg-tile: #1e2937;
+  --bg-tile-hover: #263446;
+  --line: #2c3a4b;
+  --text: #eef4fb;
+  --text-dim: #93a4b8;
+  --text-faint: #5f7186;
+  --accent: #4da3ff;
+  --accent-ink: #06121f;
+  --live: #40d178;
+  --warn: #ffb454;
+
+  --tone-casual: #4da3ff;
+  --tone-warm: #ffb454;
+  --tone-polite: #37c8b4;
+  --tone-direct: #93a4b8;
+  --tone-funny: #b48cff;
+  --tone-curious: #45cde0;
+  --tone-firm: #ff7b72;
+  --tone-gentle: #7fd18f;
+
+  --radius: 16px;
+  --tap: 68px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f7fb;
+    --bg-raised: #ffffff;
+    --bg-tile: #ffffff;
+    --bg-tile-hover: #eef4fc;
+    --line: #d8e1ec;
+    --text: #0f1a26;
+    --text-dim: #4a5b6e;
+    --text-faint: #7f8ea1;
+    --accent: #0b6bd3;
+    --accent-ink: #ffffff;
+    --live: #12904c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* The tiles are the product, not the transcript. The conversation log is capped
+ * so the suggestion area always gets the bulk of the screen — he is choosing
+ * from it under time pressure, and bigger targets are faster and more reliable
+ * to hit than a tidy scrollback is to read. */
+.app {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────── */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand h1 {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.brand-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.status {
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.status[data-kind="error"] {
+  color: var(--warn);
+}
+
+.mic {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-tile);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.mic:hover {
+  background: var(--bg-tile-hover);
+}
+.mic[aria-pressed="true"] {
+  border-color: var(--live);
+  color: var(--live);
+}
+
+.mic-pip {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.mic[aria-pressed="true"] .mic-pip {
+  background: var(--live);
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.82);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-pip {
+    animation: none !important;
+  }
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-tile);
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--bg-tile-hover);
+}
+
+/* ── Transcript ──────────────────────────────────────────────────────── */
+
+.transcript {
+  overflow-y: auto;
+  max-height: 34dvh;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.turn {
+  max-width: 74%;
+  padding: 11px 16px;
+  border-radius: 14px;
+  font-size: 17px;
+  line-height: 1.45;
+  animation: rise 0.18s ease-out;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn {
+    animation: none;
+  }
+}
+
+.turn .who {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+.turn-them {
+  align-self: flex-start;
+  background: var(--bg-tile);
+  border: 1px solid var(--line);
+}
+
+/* His own speech is visually dominant — it is the point of the app. */
+.turn-me {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.turn-me .who {
+  color: color-mix(in srgb, var(--accent-ink) 62%, transparent);
+}
+
+.turn-interim {
+  align-self: flex-start;
+  color: var(--text-faint);
+  font-style: italic;
+  border: 1px dashed var(--line);
+  background: none;
+}
+
+.empty {
+  margin: auto;
+  max-width: 420px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 15px;
+}
+.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+.empty p {
+  margin: 0;
+}
+
+kbd {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--bg-tile);
+  font: 600 12px ui-monospace, monospace;
+  color: var(--text);
+}
+
+/* ── Suggestion stage ────────────────────────────────────────────────── */
+
+.stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  padding: 14px 20px 16px;
+  min-height: 0;
+}
+
+.stage-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  min-height: 34px;
+}
+
+.stage-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.back,
+.ghost-btn {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-tile);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.back:hover,
+.ghost-btn:hover {
+  color: var(--text);
+  background: var(--bg-tile-hover);
+}
+.ghost-btn {
+  margin-left: auto;
+}
+
+.tiles {
+  display: grid;
+  /* Wide columns on purpose: five tiles wrap to two rows on a desktop rather
+     than becoming five narrow slivers, which makes each one a bigger target
+     and lets the preview sentence show without truncating. */
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  grid-auto-rows: minmax(clamp(104px, 19vh, 180px), auto);
+  /* `safe` matters: when the tiles overflow (narrow screens, six tiles), plain
+     centering clips the first row off the top where it can't be scrolled to. */
+  align-content: safe center;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--tap);
+  height: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-tile);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+}
+.tile:hover:not(:disabled) {
+  background: var(--bg-tile-hover);
+  border-color: var(--accent);
+}
+.tile:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.tile:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tile is on screen but its wordings are still streaming in. */
+.tile:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.tile-emoji {
+  font-size: 32px;
+  line-height: 1;
+  flex: none;
+}
+
+.tile-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.tile-label {
+  display: block;
+  font-size: 20px;
+  font-weight: 620;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* A taste of the actual sentence, so he can often skip stage 2 entirely by
+   recognising the wording he wants from here. */
+.tile-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-top: 5px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  overflow: hidden;
+}
+
+.tile-key {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font: 600 11px ui-monospace, monospace;
+  color: var(--text-faint);
+}
+
+/* Stage 2 — one tile per tone. */
+.tile-variant {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.tone-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tone, var(--accent));
+}
+
+.variant-text {
+  font-size: 22px;
+  line-height: 1.35;
+  font-weight: 550;
+  text-wrap: pretty;
+}
+
+.tile-variant {
+  border-left: 4px solid var(--tone, var(--accent));
+}
+
+.stage-msg {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+/* Placeholder tiles shown while the first labels are still in flight. */
+.skeleton {
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(
+    100deg,
+    var(--bg-tile) 30%,
+    var(--bg-tile-hover) 50%,
+    var(--bg-tile) 70%
+  );
+  background-size: 220% 100%;
+  animation: sweep 1.15s linear infinite;
+}
+@keyframes sweep {
+  to {
+    background-position: -220% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ── Quick phrases ───────────────────────────────────────────────────── */
+
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.chip {
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-tile);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.chip:hover {
+  background: var(--bg-tile-hover);
+  border-color: var(--accent);
+}
+.chip:active {
+  transform: scale(0.97);
+}
+.chip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.chip-type {
+  margin-left: auto;
+  border-style: dashed;
+}
+
+/* ── Dialogs ─────────────────────────────────────────────────────────── */
+
+.sheet {
+  width: min(560px, 92vw);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.sheet-wide {
+  width: min(680px, 94vw);
+}
+.sheet::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+
+.sheet form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 84dvh;
+  overflow-y: auto;
+}
+
+.sheet h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.sheet-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.sheet textarea,
+.sheet input[type="text"],
+.sheet select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+#type-input {
+  font-size: 20px;
+}
+#memory-json {
+  font: 13px/1.55 ui-monospace, monospace;
+}
+.sheet textarea:focus,
+.sheet input:focus,
+.sheet select:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.primary-btn {
+  min-height: 46px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.primary-btn:hover {
+  filter: brightness(1.08);
+}
+.ghost-btn {
+  min-height: 46px;
+  margin-left: 0;
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 18px);
+  padding: 12px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-tile);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+  z-index: 50;
+}
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ── Small screens ───────────────────────────────────────────────────── */
+
+@media (max-width: 620px) {
+  .bar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .mic {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  .bar-right {
+    margin-left: auto;
+  }
+  .transcript,
+  .stage,
+  .quick {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .tiles {
+    grid-template-columns: 1fr;
+    /* Shorter rows so more than two options are visible without scrolling. */
+    grid-auto-rows: minmax(76px, auto);
+  }
+  .tile {
+    padding: 12px 14px;
+  }
+  .tile-label {
+    font-size: 18px;
+  }
+  .turn {
+    max-width: 88%;
+  }
+  .tile-key {
+    display: none;
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "talker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An AAC conversation assistant: listens to the other person, suggests what to say, speaks it aloud.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js",
+    "smoke": "node test/smoke-live.js",
+    "ui": "node test/ui-check.js",
+    "compare": "node test/compare-models.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

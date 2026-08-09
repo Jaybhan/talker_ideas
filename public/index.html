@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1620" />
+    <title>Talker</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="bar">
+        <div class="brand">
+          <span class="brand-dot" aria-hidden="true"></span>
+          <h1>Talker</h1>
+        </div>
+
+        <button id="mic" class="mic" aria-pressed="false">
+          <span class="mic-pip" aria-hidden="true"></span>
+          <span id="mic-label">Start listening</span>
+        </button>
+
+        <div class="bar-right">
+          <span id="status" class="status" role="status" aria-live="polite"></span>
+          <button id="open-settings" class="icon-btn" aria-label="Settings" title="Settings">
+            ⚙
+          </button>
+        </div>
+      </header>
+
+      <!-- What has been said so far -->
+      <section class="transcript" id="transcript" aria-label="Conversation">
+        <div class="empty" id="transcript-empty">
+          <p class="empty-title">Nothing said yet</p>
+          <p>
+            Press <kbd>Space</kbd> or tap <strong>Start listening</strong>. When the other
+            person speaks, suggestions appear below.
+          </p>
+        </div>
+      </section>
+
+      <!-- Stage 1: what he means · Stage 2: how he says it -->
+      <main class="stage" id="stage">
+        <div class="stage-head">
+          <button id="back" class="back" hidden>← Back</button>
+          <h2 id="stage-title">What do you want to say?</h2>
+          <button id="regen" class="ghost-btn" title="New suggestions">↻ Other ideas</button>
+        </div>
+        <div class="tiles" id="tiles" role="group" aria-labelledby="stage-title"></div>
+      </main>
+
+      <!-- Always available, always instant: no model call, no waiting -->
+      <nav class="quick" aria-label="Quick phrases">
+        <button class="chip" data-say="Yes.">👍 Yes</button>
+        <button class="chip" data-say="No.">👎 No</button>
+        <button class="chip" data-say="Hold on, I'm still writing.">✋ Hold on</button>
+        <button class="chip" data-say="Thank you.">🙏 Thanks</button>
+        <button class="chip" data-say="I don't know.">🤷 Don't know</button>
+        <button class="chip" data-say="Could you say that again?">🔁 Say again</button>
+        <button class="chip" id="repeat-last">↩ Repeat that</button>
+        <button class="chip chip-type" id="open-type">⌨ Type it</button>
+      </nav>
+    </div>
+
+    <!-- Type-to-speak fallback: the suggestions will sometimes miss, and he
+         must never be stuck when they do. -->
+    <dialog id="type-dialog" class="sheet">
+      <form method="dialog" id="type-form">
+        <h2>Type what you want to say</h2>
+        <textarea
+          id="type-input"
+          rows="3"
+          placeholder="It'll be spoken aloud…"
+          autocomplete="off"
+        ></textarea>
+        <div class="sheet-actions">
+          <button value="cancel" class="ghost-btn">Cancel</button>
+          <button id="type-speak" value="speak" class="primary-btn">Speak it</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Nudge the suggestion engine toward a subject he has in mind -->
+    <dialog id="nudge-dialog" class="sheet">
+      <form method="dialog" id="nudge-form">
+        <h2>What's it about?</h2>
+        <p class="sheet-note">
+          A few words is enough. Suggestions will be built around it — not copied from it.
+        </p>
+        <input id="nudge-input" type="text" placeholder="e.g. tired, want to go out, ask about Sam" />
+        <div class="sheet-actions">
+          <button value="cancel" class="ghost-btn">Cancel</button>
+          <button value="go" class="primary-btn">Get suggestions</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="sheet sheet-wide">
+      <form method="dialog" id="settings-form">
+        <h2>Settings</h2>
+
+        <label class="field">
+          <span>Speaking voice</span>
+          <select id="voice-select"></select>
+        </label>
+
+        <label class="field">
+          <span>Speaking speed — <output id="rate-out">1.0</output>×</span>
+          <input id="rate" type="range" min="0.6" max="1.4" step="0.05" value="1" />
+        </label>
+
+        <label class="field">
+          <span>Who is he talking to?</span>
+          <input id="partner" type="text" placeholder="Mom" />
+        </label>
+
+        <label class="check">
+          <input id="auto-suggest" type="checkbox" checked />
+          <span>Suggest automatically when they stop speaking</span>
+        </label>
+
+        <div class="field">
+          <span>What Talker remembers about him</span>
+          <textarea id="memory-json" rows="10" spellcheck="false"></textarea>
+          <p class="sheet-note" id="memory-note">
+            Fed into every suggestion. Edit freely — a wrong fact here will put words in his
+            mouth.
+          </p>
+        </div>
+
+        <div class="sheet-actions">
+          <button value="cancel" class="ghost-btn">Close</button>
+          <button id="save-settings" value="save" class="primary-btn">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
