@@ -161,6 +161,18 @@ function renderMemory(memory) {
     for (const n of memory.notes) lines.push(`  - ${n}`);
   }
 
+  // Recent events go last and dated, so he can pick a thread back up rather
+  // than re-spelling something he already told the app once.
+  if (memory.recent?.length) {
+    lines.push(
+      'Things that have actually happened (his own account — you may refer to these ' +
+        'specifically, they are not invented):'
+    );
+    for (const item of memory.recent.slice(-12)) {
+      lines.push(`  - ${relativeDay(item.when)}: ${item.what}`);
+    }
+  }
+
   const tone = dominantTone(memory.tonePreference);
   if (tone) {
     lines.push(
@@ -173,6 +185,22 @@ function renderMemory(memory) {
   }
 
   return lines.length ? lines.join('\n') : 'Nothing known yet.';
+}
+
+/** "yesterday" beats "2026-08-09" for something that gets spoken about. */
+export function relativeDay(iso, today = new Date()) {
+  const then = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(then.getTime())) return iso;
+  const days = Math.round(
+    (Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) -
+      Date.UTC(then.getFullYear(), then.getMonth(), then.getDate())) /
+      86400000
+  );
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return 'last week';
+  return `${iso} (${Math.floor(days / 7)} weeks ago)`;
 }
 
 function dominantTone(counts) {
@@ -251,22 +279,48 @@ export const SUGGESTION_SCHEMA = {
 export const REFLECT_SYSTEM_PROMPT = `You maintain a profile for an AAC user, so that
 a suggestion engine can propose better things for him to say.
 
-You will be given his current profile and a transcript. Return an updated profile.
+You will be given his current profile, today's date, and a transcript. Return an
+updated profile.
 
-Record only what is durable and would help predict what he wants to say later: people
-who recur and how they relate to him, subjects he returns to, standing facts about his
-life and preferences, and phrases he reaches for repeatedly.
+## Whose words you are reading
 
-Do not record the content of one conversation as if it were a standing fact. "Talked
-about the weather on Tuesday" is noise. "Follows Arsenal closely" is signal.
+Lines marked HIM are things he chose and spoke through this app. They are verified
+ground truth — his own account of his own life. Record them, and record them
+specifically. He said them precisely so they would be heard; discarding them is the
+one way this profile fails him most.
 
-Be conservative. A wrong fact in this profile will be fed into every future suggestion
-and may put words in his mouth that are not true. If you are unsure whether something
-is durable, leave it out. Prefer to carry existing entries forward unchanged; only
-revise one when the transcript clearly contradicts it.
+Lines marked with someone else's name are what a conversation partner said. Usually
+reliable about the world, but do not turn their opinions about him into his facts.
 
-Keep the profile small: at most 12 people, 12 topics, 15 notes, 10 phrases. When at
-the limit, drop the least useful rather than growing the list.`;
+Never record something neither of them said. An inferred fact is a fabricated one.
+
+## Two kinds of memory, and the difference matters
+
+**recent** — specific things that happened, dated. "Watched the new Spider-Man;
+thought it was much better than the last one and wants to rewatch it." This is what
+lets him pick up a thread tomorrow instead of spelling it out again from scratch.
+Write each as one sentence, concrete enough to be useful: name the film, the person,
+the place, the opinion he actually expressed. Set \`when\` to today's date unless the
+transcript clearly places it earlier.
+
+Include anything he did, decided, felt, planned, or committed to; anything arranged
+for him; and anything he is waiting on. If a later conversation resolves an earlier
+entry, replace it rather than keeping both.
+
+**notes / topics / people / phrases** — standing facts that stay true across months.
+"Follows Arsenal closely." "Dislikes the Tuesday physio slot." Be conservative here:
+a wrong standing fact is fed into every future suggestion. A single event is not a
+standing fact — "watched a superhero film once" belongs in \`recent\`, while "watches
+a lot of superhero films" only becomes a note once the pattern is actually visible.
+
+Do not water an event down into a category to make it fit here. Losing "Spider-Man"
+to keep "likes films" is the exact failure this split exists to prevent.
+
+## Limits
+
+At most 20 recent, 12 people, 12 topics, 15 notes, 10 phrases. When at a limit, drop
+the least useful — for \`recent\`, the oldest or the most resolved. Carry existing
+entries forward unchanged unless the transcript adds to or contradicts them.`;
 
 export const MEMORY_SCHEMA = {
   type: 'object',
@@ -274,6 +328,22 @@ export const MEMORY_SCHEMA = {
     about: {
       type: 'string',
       description: 'One or two sentences describing him. Empty string if unknown.',
+    },
+    recent: {
+      type: 'array',
+      description: 'Dated specific events, newest last. Not generalizations.',
+      items: {
+        type: 'object',
+        properties: {
+          when: { type: 'string', description: 'YYYY-MM-DD.' },
+          what: {
+            type: 'string',
+            description: 'One concrete sentence. Name names, films, places, opinions.',
+          },
+        },
+        required: ['when', 'what'],
+        additionalProperties: false,
+      },
     },
     people: {
       type: 'array',
@@ -291,6 +361,6 @@ export const MEMORY_SCHEMA = {
     notes: { type: 'array', items: { type: 'string' } },
     phrases: { type: 'array', items: { type: 'string' } },
   },
-  required: ['about', 'people', 'topics', 'notes', 'phrases'],
+  required: ['about', 'recent', 'people', 'topics', 'notes', 'phrases'],
   additionalProperties: false,
 };

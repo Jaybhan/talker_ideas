@@ -155,6 +155,7 @@ export async function reflect({ transcript, memory }) {
       {
         role: 'user',
         content:
+          `<today>${new Date().toISOString().slice(0, 10)}</today>\n\n` +
           `<current_profile>\n${JSON.stringify(stripLocalFields(memory), null, 2)}\n</current_profile>\n\n` +
           `<transcript>\n${transcript
             .map((t) => `${t.speaker === 'me' ? 'HIM' : t.speakerName || 'THEM'}: ${t.text}`)

@@ -156,6 +156,7 @@ function addTurn(turn) {
   document.querySelector('.turn-interim')?.remove();
   el.transcript.append(node);
   el.transcript.scrollTop = el.transcript.scrollHeight;
+  scheduleReflect();
 }
 
 function showInterim(text) {
@@ -622,14 +623,47 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-/* Update the stored profile when the conversation winds down, so the next one
-   starts better informed. Best-effort — never blocks anything the user does. */
-window.addEventListener('beforeunload', () => {
-  if (state.turns.length < 4) return;
+/* Update the stored profile so the next conversation starts better informed.
+ *
+ * This runs on a lull rather than only on page close: an AAC tablet is left open
+ * all day, and `beforeunload` is unreliable exactly when it matters — a sleeping
+ * device or a discarded tab would silently lose everything he said. Reflecting
+ * mid-session also means the memory is current if the app is reopened later the
+ * same day. Only new turns are sent, so a long conversation doesn't get
+ * reprocessed from the top each time. */
+const LULL_MS = 90_000;
+let reflectTimer = null;
+let reflectedUpTo = 0;
+let reflecting = false;
+
+async function reflectNow() {
+  if (reflecting || state.turns.length - reflectedUpTo < 4) return;
+  reflecting = true;
+  const upTo = state.turns.length;
+  try {
+    await fetch('/api/reflect', jsonPost({ transcript: state.turns.slice(0, upTo) }));
+    reflectedUpTo = upTo;
+  } catch {
+    /* try again on the next lull */
+  } finally {
+    reflecting = false;
+  }
+}
+
+function scheduleReflect() {
+  clearTimeout(reflectTimer);
+  reflectTimer = setTimeout(reflectNow, LULL_MS);
+}
+
+// Also catch the page actually going away, for anything since the last lull.
+addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  if (state.turns.length - reflectedUpTo < 4) return;
   navigator.sendBeacon?.(
     '/api/reflect',
     new Blob([JSON.stringify({ transcript: state.turns })], { type: 'application/json' })
   );
+  reflectedUpTo = state.turns.length;
 });
 
 /* Debug surface. Lets the UI test drive a conversation without a microphone,

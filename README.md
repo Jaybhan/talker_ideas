@@ -75,19 +75,42 @@ talked at into a conversation.
 
 ## Memory
 
-Two halves, one cheap and one not:
+Three layers, because they fail differently.
 
-- **Tone preference** is learned locally from which variants he taps. No tokens,
-  no model call. After a few dozen taps it's a better signal about how he likes to
-  sound than anything inferred from a transcript.
-- **People, topics, and standing facts** are updated by a background model pass
-  when a conversation ends. It's told to be conservative, because a wrong fact
-  here gets fed into every future suggestion.
+**Tone preference** is learned locally from which variants he taps. No tokens, no
+model call. After a few dozen taps it's a better signal about how he likes to sound
+than anything inferred from a transcript.
 
-Both live in `data/memory.json` and are editable from the settings panel. It's
-worth seeding it by hand before a real session — it makes a visible difference.
-In testing, a one-line note ("dislikes being asked how he is feeling repeatedly")
-produced a "Stop asking that" tile with the wording *"Same as the last five times
+**Recent events** are dated specifics — *"Watched the new Spider-Man; thought it was
+much better than the last one."* They expire after three weeks. This is what lets him
+pick a thread back up the next day instead of re-spelling something he already said.
+
+**Standing facts** — people, topics, notes, phrases — are the durable layer, and the
+reflection prompt is told to be conservative about them, because a wrong standing fact
+gets injected into every future suggestion forever.
+
+The split between the last two matters more than it looks. An earlier version had only
+the durable layer, and the prompt's instruction to ignore "the content of one
+conversation" meant that when he said *"I watched the new Spider-Man, it was much
+better than the last one,"* the profile recorded `topic: films` and threw the rest
+away. The next day, asked "seen anything good lately?", the best tile it could offer
+was **"Saw a superhero movie."** He'd have had to spell out *Spider-Man* by hand —
+exactly the thing this app exists to prevent. With the episodic layer, the same
+question now produces **"Yeah, saw the new Spider-Man last night. Loved it."**
+
+The underlying mistake was applying the no-fabrication rule to the wrong thing.
+Suggestions must never invent facts about his life — but a sentence *he* chose and
+spoke through the app is verified ground truth, and the safest possible material to
+remember. The reflection prompt now distinguishes the two explicitly.
+
+Reflection runs after a 90-second lull in conversation, not on page close. An AAC
+tablet stays open all day, and `beforeunload` is unreliable exactly when it matters —
+a sleeping device would silently lose everything he'd said.
+
+Everything lives in `data/memory.json`, is editable from the settings panel, and is
+re-read when the file changes on disk. Seeding it by hand before a real session makes
+a visible difference: a one-line note ("dislikes being asked how he is feeling
+repeatedly") produced a "Stop asking that" tile worded *"Same as the last five times
 you asked."*
 
 ## Running it
@@ -160,6 +183,10 @@ Working prototype. What it does not yet have:
   everything heard is attributed to one conversation partner.
 - A misheard line can be deleted but not edited, so a mostly-right transcription
   has to be thrown away rather than fixed.
-- Memory has no undo — a bad fact has to be edited out by hand in settings.
+- Memory has no undo — a bad fact has to be edited out by hand in settings, and
+  nothing surfaces *what changed* after a reflection pass, so a wrong entry can sit
+  there unnoticed while it shapes suggestions.
+- Recent events expire on a fixed 21-day timer, which is wrong in both directions: a
+  hospital appointment matters longer than that, a passing comment matters for a day.
 - Group conversations, phone calls, and anything that isn't two people in a room
   are out of scope so far.
