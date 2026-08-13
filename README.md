@@ -73,6 +73,18 @@ the other person. AAC users get stuck being interviewed — everyone asks them
 questions, they answer, repeat. Handing him a question to ask is what turns being
 talked at into a conversation.
 
+**Always one tile against the grain.** One of the five deliberately contradicts
+whatever the transcript and profile predict he'll say. This exists because the
+opposite failed in testing: with a profile entry saying he'd enjoyed a film, all five
+tiles defended that opinion and he had no way to agree when his mother read him as
+lukewarm. Memory had turned into a position he was obliged to hold.
+
+The generalisation is that everything the app knows about him is a *prediction*, and
+this tile is for when the prediction is wrong — which is exactly when he most needs
+words and can least afford to spell them. It's also the tile most likely to get
+dropped for looking unlikely. In the bad-news scenario it produces "I can't talk about
+this right now," which is otherwise the first thing to get sanded off.
+
 ## Memory
 
 Three layers, because they fail differently.
@@ -118,8 +130,13 @@ you asked."*
 ```bash
 npm install
 cp .env.example .env      # add your ANTHROPIC_API_KEY
-npm start                 # http://localhost:3000
+npm run dev               # http://localhost:3000, reloads on change
 ```
+
+Use `npm run dev` while editing prompts, not `npm start`. Prompts are ES modules
+loaded once at boot, so a running server will happily keep serving the old prompt
+while you edit and re-test the file — the symptom is suspiciously identical output
+across runs that should differ.
 
 Chrome or Edge — speech recognition is a Chromium feature. Microphone access
 needs `localhost` or HTTPS.

@@ -96,27 +96,41 @@ refreshVoices();
  * the synthesized voice and files it as something the partner said, which
  * poisons the next round of suggestions.
  */
-function say(text, { tone } = {}) {
+function say(text, { tone, source = 'tile' } = {}) {
   if (!text) return;
 
   const wasListening = state.listening;
   if (wasListening) stopListening({ silent: true });
 
-  speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = Number(state.settings.rate) || 1;
-  const voice = voices.find((v) => v.voiceURI === state.settings.voiceURI);
-  if (voice) utter.voice = voice;
+  const speakNow = () => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = Number(state.settings.rate) || 1;
+    const voice = voices.find((v) => v.voiceURI === state.settings.voiceURI);
+    if (voice) utter.voice = voice;
 
-  const resume = () => {
-    if (wasListening && !state.listening) startListening({ silent: true });
+    const resume = () => {
+      if (wasListening && !state.listening) startListening({ silent: true });
+    };
+    utter.addEventListener('end', resume);
+    utter.addEventListener('error', resume);
+    speechSynthesis.speak(utter);
   };
-  utter.addEventListener('end', resume);
-  utter.addEventListener('error', resume);
-  speechSynthesis.speak(utter);
+
+  // Chrome silently drops an utterance started in the same tick as cancel(),
+  // or while a just-stopped recognition session is still tearing down its own
+  // audio stream. Only cancel when something's actually playing, and give the
+  // engine a beat to flush before speaking again.
+  if (speechSynthesis.speaking || speechSynthesis.pending) {
+    speechSynthesis.cancel();
+    setTimeout(speakNow, 50);
+  } else if (wasListening) {
+    setTimeout(speakNow, 50);
+  } else {
+    speakNow();
+  }
 
   state.lastSpoken = text;
-  addTurn({ speaker: 'me', text });
+  addTurn({ speaker: 'me', text, source });
   if (tone) fetch('/api/spoke', jsonPost({ tone })).catch(() => {});
 }
 
@@ -504,7 +518,7 @@ el.regen.addEventListener('click', () => {
 });
 
 for (const chip of document.querySelectorAll('.chip[data-say]')) {
-  chip.addEventListener('click', () => say(chip.dataset.say));
+  chip.addEventListener('click', () => say(chip.dataset.say, { source: 'chip' }));
 }
 
 $('repeat-last').addEventListener('click', () => {
@@ -532,7 +546,7 @@ $('open-type').addEventListener('click', () => {
 $('type-form').addEventListener('submit', (event) => {
   if (event.submitter?.value !== 'speak') return;
   const text = el.typeInput.value.trim();
-  if (text) say(text);
+  if (text) say(text, { source: 'typed' });
 });
 
 // Enter speaks; Shift+Enter makes a new line.
@@ -540,7 +554,7 @@ el.typeInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     const text = el.typeInput.value.trim();
-    if (text) say(text);
+    if (text) say(text, { source: 'typed' });
     el.typeDialog.close();
   }
 });
@@ -641,7 +655,7 @@ async function reflectNow() {
   reflecting = true;
   const upTo = state.turns.length;
   try {
-    await fetch('/api/reflect', jsonPost({ transcript: state.turns.slice(0, upTo) }));
+    await fetch('/api/reflect', jsonPost({ transcript: state.turns.slice(reflectedUpTo, upTo) }));
     reflectedUpTo = upTo;
   } catch {
     /* try again on the next lull */
@@ -661,7 +675,7 @@ addEventListener('visibilitychange', () => {
   if (state.turns.length - reflectedUpTo < 4) return;
   navigator.sendBeacon?.(
     '/api/reflect',
-    new Blob([JSON.stringify({ transcript: state.turns })], { type: 'application/json' })
+    new Blob([JSON.stringify({ transcript: state.turns.slice(reflectedUpTo) })], { type: 'application/json' })
   );
   reflectedUpTo = state.turns.length;
 });

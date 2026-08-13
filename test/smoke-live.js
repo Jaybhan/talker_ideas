@@ -31,6 +31,34 @@ const SCENARIOS = [
     ],
   },
   {
+    /* Regression: memory used to lock him into a past opinion. With a profile
+       entry saying he liked the film, every tile pushed back on Mom's reading
+       and there was no way to simply agree with her. Look for a tile that
+       concedes — if all five defend the earlier opinion, this has regressed. */
+    name: 'Must be able to contradict his own recorded opinion',
+    memory: {
+      about: '',
+      people: [{ name: 'Mom', relationship: 'mother' }],
+      topics: ['films'],
+      notes: [],
+      phrases: [],
+      recent: [
+        {
+          when: new Date().toISOString().slice(0, 10),
+          what: 'Watched the new Spider-Man; thought it was much better than the last one and wants to watch it again.',
+        },
+      ],
+      tonePreference: {},
+    },
+    transcript: [
+      { speaker: 'them', speakerName: 'Mom', text: 'Have you seen any films recently?' },
+      { speaker: 'me', text: 'New Spider-Man. Last night.' },
+      { speaker: 'them', speakerName: 'Mom', text: "Oh that's cool, did you like it?" },
+      { speaker: 'me', text: 'Good film, but the snacks did a lot of work.' },
+      { speaker: 'them', speakerName: 'Mom', text: "I see, so it wasn't your favourite." },
+    ],
+  },
+  {
     name: 'Mid-conversation, he should be able to ask back',
     memory: {
       about: '',

@@ -157,9 +157,7 @@ export async function reflect({ transcript, memory }) {
         content:
           `<today>${new Date().toISOString().slice(0, 10)}</today>\n\n` +
           `<current_profile>\n${JSON.stringify(stripLocalFields(memory), null, 2)}\n</current_profile>\n\n` +
-          `<transcript>\n${transcript
-            .map((t) => `${t.speaker === 'me' ? 'HIM' : t.speakerName || 'THEM'}: ${t.text}`)
-            .join('\n')}\n</transcript>\n\n` +
+          `<transcript>\n${transcript.map(reflectLine).join('\n')}\n</transcript>\n\n` +
           'Return the updated profile.',
       },
     ],
@@ -170,6 +168,15 @@ export async function reflect({ transcript, memory }) {
   const text = response.content.find((b) => b.type === 'text')?.text;
   if (!text) throw new Error('reflect: no text block in response');
   return JSON.parse(text);
+}
+
+/**
+ * `source` distinguishes wording he composed himself from wording he picked
+ * off the screen — see the "typed vs. chosen" note in REFLECT_SYSTEM_PROMPT.
+ */
+function reflectLine(t) {
+  if (t.speaker !== 'me') return `${t.speakerName || 'THEM'}: ${t.text}`;
+  return `HIM, ${t.source === 'typed' ? 'typed himself' : 'chose from suggested options'}: ${t.text}`;
 }
 
 function stripLocalFields(memory) {
